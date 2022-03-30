@@ -9,8 +9,6 @@ from Ftx.FtxSimpleCommands import FtxSimpleCommands
 def main():
     ftx = FtxSimpleCommands('','')
     pprint(ftx.getAllAccountsThatHaveOrders())
-    ftx = FtxClient('', '','xaut-usdT 2')
-    data = ftx.get_subAccounts()
     # pprint(ftx.ord)
     # ftx.get_withdrawals()
 
