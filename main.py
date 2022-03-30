@@ -1,18 +1,13 @@
+import os
 from pprint import pprint
-
 from Ftx.FtxClient import FtxClient
-import json
-
-from Ftx.FtxSimpleCommands import FtxSimpleCommands
+from dotenv import load_dotenv
 
 
 def main():
-    ftx = FtxSimpleCommands('','')
-    pprint(ftx.getAllAccountsThatHaveOrders())
-    ftx = FtxClient('', '','xaut-usdT 2')
-    data = ftx.get_subAccounts()
-    # pprint(ftx.ord)
-    # ftx.get_withdrawals()
+    load_dotenv()
+
+    ftx = FtxClient(str(os.getenv("API_KEY")), str(os.getenv("API_SECRET")))
 
 
 

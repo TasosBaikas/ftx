@@ -1,5 +1,6 @@
 import time
 import urllib.parse
+from pprint import pprint
 from typing import Optional, Dict, Any, List
 
 from requests import Request, Session, Response
@@ -56,6 +57,71 @@ class FtxClient:
             if not data['success']:
                 raise Exception(data['error'])
             return data['result']
+
+    # Made by tasosbaikas
+    def get_all_accounts_that_have_orders(self) -> list:
+        data = self.get_subAccounts()
+        result = []
+        for sub in data:
+            ftx = FtxClient(self._api_key, self._api_secret, sub['nickname'])
+            pos = ftx.get_open_orders()
+            if pos:
+                result.append(sub['nickname'])
+
+        return result
+
+    # Made by tasosbaikas
+    def transfer_all_funds_to_subaccount(self, subaccount: str):
+        data = self.get_all_balances()
+        for sub_account_name in data:#takes the key
+            for sub_account_coin in data[sub_account_name]:#takes the value
+                if sub_account_coin['availableWithoutBorrow'] <= 0:
+                    continue
+
+                try:
+                    self.transfer_beetween_Accounts(
+                        {
+                            "coin": sub_account_coin['coin'],
+                            "size": sub_account_coin["availableWithoutBorrow"],
+                            "source": sub_account_name,
+                            "destination": subaccount,
+                        }
+                    )
+                except Exception:
+                    pass
+
+    # Made by tasosbaikas
+    def cover_all_leveraged_subaccounts(self, take_money_from_subaccount: str):
+        data = self.get_all_balances()
+        for sub_account_name in data:# takes the keys
+            for sub_account_coin in data[sub_account_name]:# takes the values
+                if sub_account_coin['total'] >= 0:# if balance at the specific coin is positive it means that it has no leverage
+                    continue
+
+                if (sub_account_name == take_money_from_subaccount):# if the account is the same as the account to transfer
+                    continue
+
+                try:
+                    if (data[take_money_from_subaccount][0]["total"] < -sub_account_coin["total"]):# by default sub_account_coin["total"] is negative so we are using minus
+                        raise RuntimeError()
+
+                    self.transfer_beetween_Accounts(
+                        {
+                            "coin": sub_account_coin['coin'],
+                            "size": -sub_account_coin["total"],
+                            "source": take_money_from_subaccount,
+                            "destination": sub_account_name,
+                        }
+                    )
+                except RuntimeError:
+                    print(f'{take_money_from_subaccount} hasn\'t enough {sub_account_coin["coin"]} to cover {sub_account_name}')
+                except Exception:
+                    pass
+
+    # Made by tasosbaikas
+    def transfer_beetween_Accounts(self,params: Optional[Dict[str, Any]] = None):
+        return self._post('subaccounts/transfer', params)
+
 
     def get_all_futures(self) -> List[dict]:
         return self._get('futures')
