@@ -1,6 +1,5 @@
 import time
 import urllib.parse
-from pprint import pprint
 from typing import Optional, Dict, Any, List
 
 from requests import Request, Session, Response
