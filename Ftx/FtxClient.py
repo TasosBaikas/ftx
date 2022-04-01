@@ -176,6 +176,7 @@ class FtxClient:
 
         return total_sum
 
+    # Made by tasosbaikas
     def _name_of_markets(self,data) -> list:
         newList = []
         for each_transaction in data:
@@ -193,7 +194,7 @@ class FtxClient:
 
         return newList
 
-
+    # Made by tasosbaikas
     def find_how_much_all_subaccounts_won(self, start_time=None, end_time=None):
         data = self.get_subAccounts()
         result = {}
