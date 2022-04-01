@@ -95,31 +95,44 @@ class FtxClient:
         data = self.get_all_balances()
         for sub_account_name in data:  # takes the keys
             for sub_account_coin in data[sub_account_name]:  # takes the values
-                if sub_account_coin[
-                    'total'] >= 0:  # if balance at the specific coin is positive it means that it has no leverage
+                if sub_account_coin['total'] >= 0:  # if balance at the specific coin is positive it means that it has no leverage
                     continue
 
                 if sub_account_name == take_money_from_subaccount:  # if the account is the same as the account to transfer
                     continue
 
-                try:
-                    if data[take_money_from_subaccount][0]["total"] < -sub_account_coin[
-                        "total"]:  # by default sub_account_coin["total"] is negative so we are using minus
-                        raise RuntimeError()
+                for take_money_from_subaccount_coin in data[take_money_from_subaccount]:
+                    if (take_money_from_subaccount_coin['coin'] != sub_account_coin['coin']):
+                        continue
 
-                    self.transfer_beetween_Accounts(
-                        {
-                            "coin": sub_account_coin['coin'],
-                            "size": -sub_account_coin["total"],
-                            "source": take_money_from_subaccount,
-                            "destination": sub_account_name,
-                        }
-                    )
-                except RuntimeError:
-                    print(
-                        f'{take_money_from_subaccount} hasn\'t enough {sub_account_coin["coin"]} to cover {sub_account_name}')
-                except Exception:
-                    pass
+                    if take_money_from_subaccount_coin["total"] <= 0:
+                        break
+
+                    if take_money_from_subaccount_coin["total"] < -sub_account_coin["total"]:
+                        self.transfer_beetween_Accounts(
+                            {
+                                "coin": sub_account_coin['coin'],
+                                "size": take_money_from_subaccount_coin["total"],
+                                "source": take_money_from_subaccount,
+                                "destination": sub_account_name,
+                            }
+                        )
+                    else:
+                        try:
+                            self.transfer_beetween_Accounts(
+                                {
+                                    "coin": sub_account_coin['coin'],
+                                    "size": -sub_account_coin["total"],
+                                    "source": take_money_from_subaccount,
+                                    "destination": sub_account_name,
+                                }
+                            )
+                        except Exception:
+                            pass
+
+                        break
+
+
 
     # Made by tasosbaikas
     def transfer_beetween_Accounts(self, params: Optional[Dict[str, Any]] = None) -> dict:
