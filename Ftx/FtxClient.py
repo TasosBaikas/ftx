@@ -1,5 +1,6 @@
 import time
 import urllib.parse
+from pprint import pprint
 from typing import Optional, Dict, Any, List
 
 from requests import Request, Session, Response
@@ -28,7 +29,7 @@ class FtxClient:
         return self._request('DELETE', path, json=params)
 
     def _request(self, method: str, path: str, **kwargs) -> Any:
-        request = Request(method, self._ENDPOINT + path.replace(" ","%20"), **kwargs)
+        request = Request(method, self._ENDPOINT + path.replace(" ", "%20"), **kwargs)
         self._sign_request(request)
         response = self._session.send(request.prepare())
         return self._process_response(response)
@@ -70,10 +71,10 @@ class FtxClient:
         return result
 
     # Made by tasosbaikas
-    def transfer_all_funds_to_subaccount(self, subaccount: str):
+    def transfer_all_funds_to_subaccount(self, subaccount: str) -> None:
         data = self.get_all_balances()
-        for sub_account_name in data:#takes the key
-            for sub_account_coin in data[sub_account_name]:#takes the value
+        for sub_account_name in data:  # takes the key
+            for sub_account_coin in data[sub_account_name]:  # takes the value
                 if sub_account_coin['availableWithoutBorrow'] <= 0:
                     continue
 
@@ -90,37 +91,132 @@ class FtxClient:
                     pass
 
     # Made by tasosbaikas
-    def cover_all_leveraged_subaccounts(self, take_money_from_subaccount: str):
+    def cover_all_leveraged_subaccounts(self, take_money_from_subaccount: str) -> None:
         data = self.get_all_balances()
-        for sub_account_name in data:# takes the keys
-            for sub_account_coin in data[sub_account_name]:# takes the values
-                if sub_account_coin['total'] >= 0:# if balance at the specific coin is positive it means that it has no leverage
+        for sub_account_name in data:  # takes the keys
+            for sub_account_coin in data[sub_account_name]:  # takes the values
+                if sub_account_coin['total'] >= 0:  # if balance at the specific coin is positive it means that it has no leverage
                     continue
 
-                if (sub_account_name == take_money_from_subaccount):# if the account is the same as the account to transfer
+                if sub_account_name == take_money_from_subaccount:  # if the account is the same as the account to transfer
                     continue
 
-                try:
-                    if (data[take_money_from_subaccount][0]["total"] < -sub_account_coin["total"]):# by default sub_account_coin["total"] is negative so we are using minus
-                        raise RuntimeError()
+                for take_money_from_subaccount_coin in data[take_money_from_subaccount]:
+                    if (take_money_from_subaccount_coin['coin'] != sub_account_coin['coin']):
+                        continue
 
-                    self.transfer_beetween_Accounts(
-                        {
-                            "coin": sub_account_coin['coin'],
-                            "size": -sub_account_coin["total"],
-                            "source": take_money_from_subaccount,
-                            "destination": sub_account_name,
-                        }
-                    )
-                except RuntimeError:
-                    print(f'{take_money_from_subaccount} hasn\'t enough {sub_account_coin["coin"]} to cover {sub_account_name}')
-                except Exception:
-                    pass
+                    if take_money_from_subaccount_coin["total"] <= 0:
+                        break
+
+                    if take_money_from_subaccount_coin["total"] < -sub_account_coin["total"]:
+                        self.transfer_beetween_Accounts(
+                            {
+                                "coin": sub_account_coin['coin'],
+                                "size": take_money_from_subaccount_coin["total"],
+                                "source": take_money_from_subaccount,
+                                "destination": sub_account_name,
+                            }
+                        )
+                    else:
+                        try:
+                            self.transfer_beetween_Accounts(
+                                {
+                                    "coin": sub_account_coin['coin'],
+                                    "size": -sub_account_coin["total"],
+                                    "source": take_money_from_subaccount,
+                                    "destination": sub_account_name,
+                                }
+                            )
+                        except Exception:
+                            pass
+
+                        break
+
+
 
     # Made by tasosbaikas
-    def transfer_beetween_Accounts(self,params: Optional[Dict[str, Any]] = None):
+    def transfer_beetween_Accounts(self, params: Optional[Dict[str, Any]] = None) -> dict:
         return self._post('subaccounts/transfer', params)
 
+    # Made by tasosbaikas
+    # use datetime.datetime(2022, 3, 28, 0, 0, 0).timestamp() to calculate start_time and end_time
+    def find_how_much_the_account_won(self, start_time=None, end_time=None) -> float:
+        temp_start = start_time
+        temp_end = end_time
+        data = self.get_order_history(start_time=temp_start, end_time=temp_end)
+
+        name_of_markets = self._name_of_markets(data)
+
+        total_sum = 0
+        for name in name_of_markets:
+            buy_sum = 0
+            sell_sum = 0
+            buy_filledSize_sum = 0
+            sell_filledSize_sum = 0
+            avgFillPrice_sum = 0
+            each_transaction_count = 0
+            for each_transaction in data:
+                if each_transaction['filledSize'] == 0:
+                    continue
+
+                try: # if it is spot
+                    index_of_slash = each_transaction['market'].index("/") # if it spot market it will be in format e.g USDT/USD
+                    if not each_transaction['market'][0:index_of_slash] == name:
+                        continue
+                except Exception: # that means that it is perpetual
+                    if not each_transaction['market'] == name: # if it perpetual it will be in format e.g USDT-PERP
+                        continue
+
+                if each_transaction['side'] == 'buy':
+                    buy_sum += each_transaction['filledSize'] * each_transaction['avgFillPrice']
+                    buy_filledSize_sum += each_transaction['filledSize']
+                elif each_transaction['side'] == 'sell':
+                    sell_sum += each_transaction['filledSize'] * each_transaction['avgFillPrice']
+                    sell_filledSize_sum += each_transaction['filledSize']
+
+                avgFillPrice_sum += each_transaction['avgFillPrice']
+                each_transaction_count += 1
+
+            if (each_transaction_count == 0):
+                continue
+
+            coins_that_remain = abs(buy_filledSize_sum - sell_filledSize_sum)
+            if (buy_sum <= sell_sum):
+                total_sum += sell_sum - buy_sum - coins_that_remain * avgFillPrice_sum / each_transaction_count
+
+            if (buy_sum > sell_sum):
+                total_sum += sell_sum - buy_sum + coins_that_remain * avgFillPrice_sum / each_transaction_count
+
+        return total_sum
+
+    # Made by tasosbaikas
+    def _name_of_markets(self,data) -> list:
+        newList = []
+        for each_transaction in data:
+            if each_transaction['filledSize'] == 0:
+                continue
+
+            try:# if it is spot
+                index_of_slash = each_transaction['market'].index("/")
+                if not each_transaction['market'][0:index_of_slash] in newList:
+                    newList.append(each_transaction['market'][0:index_of_slash])
+
+            except Exception:# that means that it is perpetual
+                if not each_transaction['market'] in newList:
+                    newList.append(each_transaction['market'])
+
+        return newList
+
+    # Made by tasosbaikas
+    def find_how_much_all_subaccounts_won(self, start_time=None, end_time=None):
+        data = self.get_subAccounts()
+        result = {}
+        for sub in data:
+            ftx = FtxClient(self._api_key, self._api_secret, sub['nickname'])
+            sub_account_won = ftx.find_how_much_the_account_won(start_time, end_time)
+            result[sub['nickname']] = sub_account_won
+
+        return result
 
     def get_all_futures(self) -> List[dict]:
         return self._get('futures')
