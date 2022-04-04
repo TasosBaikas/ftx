@@ -180,12 +180,11 @@ class FtxClient:
             if (each_transaction_count == 0):
                 continue
 
-            coins_that_remain = abs(buy_filledSize_sum - sell_filledSize_sum)
-            if (buy_sum <= sell_sum):
-                total_sum += sell_sum - buy_sum - coins_that_remain * avgFillPrice_sum / each_transaction_count
-
-            if (buy_sum > sell_sum):
+            coins_that_remain = buy_filledSize_sum - sell_filledSize_sum
+            if (coins_that_remain >= 0):#if >= 0 it means that we have the coins and we have not sell them yet!
                 total_sum += sell_sum - buy_sum + coins_that_remain * avgFillPrice_sum / each_transaction_count
+            else:#if coins_that_remain is negative it means that we are in leverage
+                total_sum += sell_sum - buy_sum + coins_that_remain * avgFillPrice_sum / each_transaction_count # in this case coins_that_remain is negative
 
         return total_sum
 
